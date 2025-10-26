@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Canvas WebGL Ajustable</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --accent: #0077ff;
+        --panel-bg: rgba(18, 18, 18, 0.85);
+        --panel-text: #f5f5f5;
+        --panel-border: rgba(255, 255, 255, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: radial-gradient(circle at top, #10131c, #05070c 55%);
+        color: #f1f5f9;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.25rem clamp(1rem, 4vw, 2.5rem);
+        background: rgba(10, 12, 18, 0.75);
+        backdrop-filter: blur(14px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: clamp(1.25rem, 3vw, 1.8rem);
+        letter-spacing: 0.02em;
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      button {
+        cursor: pointer;
+        font-size: 1rem;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        padding: 0.6rem 1.3rem;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 600;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      button:hover,
+      button:focus-visible {
+        outline: none;
+        transform: translateY(-1px);
+        box-shadow: 0 10px 25px rgba(0, 119, 255, 0.35);
+      }
+
+      main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: clamp(1.5rem, 4vw, 3rem);
+        gap: 1.5rem;
+      }
+
+      #glCanvas {
+        width: 100%;
+        max-width: min(960px, 90vw);
+        aspect-ratio: 16 / 10;
+        border-radius: 1.25rem;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        background: #020205;
+        box-shadow: 0 18px 35px rgba(3, 7, 18, 0.6);
+      }
+
+      .info {
+        max-width: 960px;
+        text-align: center;
+        line-height: 1.6;
+        color: rgba(226, 232, 240, 0.9);
+        font-size: clamp(1rem, 2.5vw, 1.1rem);
+      }
+
+      .settings-panel {
+        position: fixed;
+        inset: 0;
+        background: rgba(4, 6, 12, 0.65);
+        display: grid;
+        place-items: center;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+        padding: 1rem;
+      }
+
+      .settings-panel.open {
+        opacity: 1;
+        pointer-events: all;
+      }
+
+      .settings-card {
+        background: var(--panel-bg);
+        color: var(--panel-text);
+        border-radius: 1.25rem;
+        border: 1px solid var(--panel-border);
+        width: min(360px, 100%);
+        padding: 1.75rem;
+        box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+      }
+
+      .settings-card h2 {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 700;
+      }
+
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+
+      input[type="number"] {
+        padding: 0.65rem 0.85rem;
+        border-radius: 0.75rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(12, 15, 23, 0.8);
+        color: inherit;
+        font-size: 1rem;
+      }
+
+      input[type="number"]:focus-visible {
+        outline: 2px solid var(--accent);
+        border-color: transparent;
+      }
+
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+      }
+
+      .ghost {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        color: inherit;
+      }
+
+      footer {
+        text-align: center;
+        padding: 1.5rem;
+        font-size: 0.95rem;
+        color: rgba(148, 163, 184, 0.85);
+      }
+
+      @media (max-width: 540px) {
+        header {
+          flex-direction: column;
+          gap: 0.75rem;
+          text-align: center;
+        }
+
+        .controls {
+          width: 100%;
+          justify-content: center;
+        }
+
+        .settings-card {
+          padding: 1.4rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Canvas WebGL Interactivo</h1>
+      <div class="controls">
+        <button id="settingsToggle" type="button" aria-haspopup="dialog" aria-controls="settingsPanel">
+          Ajustes de lienzo
+        </button>
+      </div>
+    </header>
+    <main>
+      <canvas id="glCanvas" role="img" aria-label="Animación WebGL con degradado dinámico"></canvas>
+      <p class="info">
+        Experimenta con un lienzo WebGL optimizado que mantiene un renderizado fluido incluso al aumentar su resolución.
+        Utiliza el botón de ajustes para definir un tamaño específico que se adapte a tus necesidades o a tu pantalla.
+      </p>
+    </main>
+    <footer>
+      Hecho con WebGL para demostraciones en GitHub Pages.
+    </footer>
+
+    <div
+      class="settings-panel"
+      id="settingsPanel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settingsTitle"
+    >
+      <div class="settings-card">
+        <h2 id="settingsTitle">Dimensiones del lienzo</h2>
+        <form id="settingsForm">
+          <label>
+            Ancho (px)
+            <input id="widthInput" type="number" min="200" max="2000" step="10" required />
+          </label>
+          <label>
+            Alto (px)
+            <input id="heightInput" type="number" min="200" max="2000" step="10" required />
+          </label>
+          <div class="actions">
+            <button class="ghost" type="button" id="cancelSettings">Cancelar</button>
+            <button type="submit">Aplicar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("glCanvas");
+      const gl = canvas.getContext("webgl", { antialias: true, powerPreference: "high-performance" });
+
+      if (!gl) {
+        canvas.insertAdjacentHTML(
+          "beforebegin",
+          '<p role="alert">Tu navegador no soporta WebGL. Prueba con una versión más reciente.</p>'
+        );
+        throw new Error("WebGL no soportado");
+      }
+
+      const vertexShaderSource = `
+        attribute vec2 a_position;
+        varying vec2 v_uv;
+
+        void main() {
+          v_uv = (a_position + 1.0) * 0.5;
+          gl_Position = vec4(a_position, 0.0, 1.0);
+        }
+      `;
+
+      const fragmentShaderSource = `
+        precision mediump float;
+        varying vec2 v_uv;
+        uniform float u_time;
+        uniform vec2 u_resolution;
+
+        void main() {
+          vec2 uv = v_uv;
+          float gradient = smoothstep(0.0, 1.0, uv.y);
+          float waves = sin((uv.x + uv.y + u_time * 0.12) * 8.0) * 0.1;
+          float pulse = sin(u_time * 0.6) * 0.05;
+          float glow = gradient + waves + pulse;
+          vec3 baseColor = mix(vec3(0.06, 0.17, 0.41), vec3(0.29, 0.69, 1.0), gradient);
+          vec3 accent = vec3(0.7, 0.9, 1.0) * glow;
+          vec3 color = baseColor + accent * 0.35;
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `;
+
+      function createShader(type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          const info = gl.getShaderInfoLog(shader);
+          gl.deleteShader(shader);
+          throw new Error(`Error compilando shader: ${info}`);
+        }
+        return shader;
+      }
+
+      function createProgram(vertexSource, fragmentSource) {
+        const vertexShader = createShader(gl.VERTEX_SHADER, vertexSource);
+        const fragmentShader = createShader(gl.FRAGMENT_SHADER, fragmentSource);
+        const program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+          const info = gl.getProgramInfoLog(program);
+          gl.deleteProgram(program);
+          throw new Error(`Error enlazando programa: ${info}`);
+        }
+        return program;
+      }
+
+      const program = createProgram(vertexShaderSource, fragmentShaderSource);
+      gl.useProgram(program);
+
+      const positionBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      const positions = new Float32Array([
+        -1, -1,
+        1, -1,
+        -1, 1,
+        -1, 1,
+        1, -1,
+        1, 1,
+      ]);
+      gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+      const aPositionLocation = gl.getAttribLocation(program, "a_position");
+      gl.enableVertexAttribArray(aPositionLocation);
+      gl.vertexAttribPointer(aPositionLocation, 2, gl.FLOAT, false, 0, 0);
+
+      const uTimeLocation = gl.getUniformLocation(program, "u_time");
+      const uResolutionLocation = gl.getUniformLocation(program, "u_resolution");
+
+      const DEFAULT_SIZE = { width: 640, height: 400 };
+
+      function setCanvasSize(width, height) {
+        const clampedWidth = Math.min(Math.max(width, 200), 2000);
+        const clampedHeight = Math.min(Math.max(height, 200), 2000);
+        const deviceRatio = window.devicePixelRatio || 1;
+
+        canvas.style.width = `${clampedWidth}px`;
+        canvas.style.height = `${clampedHeight}px`;
+        canvas.width = Math.round(clampedWidth * deviceRatio);
+        canvas.height = Math.round(clampedHeight * deviceRatio);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+
+        gl.uniform2f(uResolutionLocation, canvas.width, canvas.height);
+      }
+
+      let startTime = performance.now();
+      function render() {
+        const now = performance.now();
+        const elapsed = (now - startTime) / 1000;
+        gl.uniform1f(uTimeLocation, elapsed);
+
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        requestAnimationFrame(render);
+      }
+
+      setCanvasSize(DEFAULT_SIZE.width, DEFAULT_SIZE.height);
+      requestAnimationFrame(render);
+
+      const settingsToggle = document.getElementById("settingsToggle");
+      const settingsPanel = document.getElementById("settingsPanel");
+      const cancelButton = document.getElementById("cancelSettings");
+      const form = document.getElementById("settingsForm");
+      const widthInput = document.getElementById("widthInput");
+      const heightInput = document.getElementById("heightInput");
+
+      function openSettings() {
+        widthInput.value = Math.round(parseFloat(canvas.style.width) || DEFAULT_SIZE.width);
+        heightInput.value = Math.round(parseFloat(canvas.style.height) || DEFAULT_SIZE.height);
+        settingsPanel.classList.add("open");
+        settingsToggle.setAttribute("aria-expanded", "true");
+        widthInput.focus();
+      }
+
+      function closeSettings() {
+        settingsPanel.classList.remove("open");
+        settingsToggle.setAttribute("aria-expanded", "false");
+        settingsToggle.focus();
+      }
+
+      settingsToggle.addEventListener("click", () => {
+        if (settingsPanel.classList.contains("open")) {
+          closeSettings();
+        } else {
+          openSettings();
+        }
+      });
+
+      cancelButton.addEventListener("click", () => {
+        closeSettings();
+      });
+
+      settingsPanel.addEventListener("click", (event) => {
+        if (event.target === settingsPanel) {
+          closeSettings();
+        }
+      });
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const newWidth = Number(widthInput.value);
+        const newHeight = Number(heightInput.value);
+        setCanvasSize(newWidth, newHeight);
+        closeSettings();
+      });
+
+      window.addEventListener("resize", () => {
+        const currentWidth = parseFloat(canvas.style.width) || DEFAULT_SIZE.width;
+        const currentHeight = parseFloat(canvas.style.height) || DEFAULT_SIZE.height;
+        setCanvasSize(currentWidth, currentHeight);
+      });
+    </script>
+  </body>
+</html>
